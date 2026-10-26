@@ -1,0 +1,17 @@
+# Build output
+build/
+out/
+*.exe
+*.obj
+*.pdb
+*.ilk
+
+# Local vcpkg checkout (install vcpkg separately; deps come from vcpkg.json)
+vcpkg/
+vcpkg_installed/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env

@@ -1,0 +1,6 @@
+{
+  "cmake.configureSettings": {
+    "CMAKE_TOOLCHAIN_FILE": "C:/hybrid_trading_engine/vcpkg/scripts/buildsystems/vcpkg.cmake",
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+  }
+}
