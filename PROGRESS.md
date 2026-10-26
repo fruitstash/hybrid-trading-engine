@@ -73,7 +73,7 @@ Companion to [hybrid-trading-engine-spec.md](hybrid-trading-engine-spec.md). Upd
 
 ### Housekeeping
 - [ ] `docs/` is empty (spec expects the spec there)
-- [ ] Stray `test.exe`; not a git repo yet
+- [x] Git repo initialised, `.gitignore` excludes `build/`, `vcpkg/`, `*.exe`; pushed to https://github.com/fruitstash/hybrid-trading-engine (public)
 - [ ] Spec §3 file list doesn't mention `matching_engine.hpp` / `matching_engine_tests.cpp`
 
 ---
@@ -94,3 +94,4 @@ Companion to [hybrid-trading-engine-spec.md](hybrid-trading-engine-spec.md). Upd
 
 - **2026-10-26** — Created tracker from audit of repo vs. spec.
 - **2026-10-26** — Priority 1 tests written (45 passing). Fixed two order-book memory leaks. Priority 2 wired via `MatchingEngine`; CMake restructured with ctest. All 3 test suites pass.
+- **2026-10-26** — Repo pushed to GitHub (fruitstash/hybrid-trading-engine).
