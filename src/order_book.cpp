@@ -104,7 +104,7 @@ double OrderBook::best_ask() const {
     return 0.0;
 }
 
-void OrderBook::match_market_order(bool is_buy, uint32_t shares){
+uint32_t OrderBook::match_market_order(bool is_buy, uint32_t shares){
 
     auto walk_and_fill = [&](auto& levels, bool ascending) {
         uint32_t remaining = shares;
@@ -139,11 +139,12 @@ void OrderBook::match_market_order(bool is_buy, uint32_t shares){
                 consume_level(levels[i]);
             }
         }
+        return shares - remaining;
     };
 
     if(is_buy){
-        walk_and_fill(asks_, true);
+        return walk_and_fill(asks_, true);
     } else{
-        walk_and_fill(bids_,false);
+        return walk_and_fill(bids_,false);
     }
-};
+}

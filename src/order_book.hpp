@@ -21,7 +21,8 @@ class OrderBook {
         void   cancel_order(uint64_t order_id);
         double best_bid() const;
         double best_ask() const;
-        void   match_market_order(bool is_buy,uint32_t shares);
+        // Returns the number of shares actually filled (less than `shares` if the book runs dry).
+        uint32_t match_market_order(bool is_buy,uint32_t shares);
         // just for testing remove after all the tests are complete
         size_t debug_price_to_index(double price) const { return price_to_index(price); }
 

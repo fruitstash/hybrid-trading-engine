@@ -160,6 +160,8 @@ public:
 }
 ```
 
+**As implemented (Priority 3):** the signature travels as a separate ZMQ frame rather than a JSON field. Each message is two frames: frame 0 is the JSON above *without* `signature`, frame 1 is the lowercase hex HMAC-SHA256 of frame 0's exact bytes, keyed by the shared secret in the `HTE_HMAC_SECRET` environment variable. Signing raw bytes avoids Python and C++ having to agree on a canonical JSON serialisation. Clamp ranges, fallback defaults and timing windows are operator-configurable in `config/risk_limits.json`.
+
 The Parameter Validation Layer must, before anything touches live risk state:
 - Reject negative or zero prices/sizes
 - Clamp `max_spread_pct` and `urgency_multiplier` to sane bounds
