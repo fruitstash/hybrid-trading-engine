@@ -1,1 +1,8 @@
 pyzmq>=26
+requests>=2.32
+pydantic>=2.9
+langchain-core>=1.7
+langchain-groq>=1.1        # only used when [llm] provider = "groq"
+langchain-anthropic>=1.7   # only used when [llm] provider = "claude"
+langchain-ollama>=1.1      # only used when [llm] provider = "ollama"
+pytest>=8                  # tests

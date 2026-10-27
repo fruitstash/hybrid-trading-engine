@@ -1,0 +1,63 @@
+# Cold-path (Python AI) settings. API keys do NOT go here - put them in
+# cold-path/.env (gitignored); see .env.example.
+
+symbol = "SPY"
+
+# How often to re-analyse the market (fetch data + think).
+analysis_interval_minutes = 15
+
+# How often to re-send the latest decision to the C++ engine. Must be well
+# under the engine's staleness_window_s (30 s) or it falls back to defaults.
+heartbeat_seconds = 5
+
+# Stop re-sending a decision this old, so the engine falls back to its safe
+# defaults if analysis keeps failing (data outage, etc.).
+max_decision_age_minutes = 60
+
+# Skip the AI call (reuse the last decision) when there are no new headlines
+# and the price moved less than this since the last AI decision.
+reanalyse_price_move_pct = 0.25
+
+[llm]
+# "rules"  - no AI, free: keyword sentiment + formula-based risk settings
+# "groq"   - hosted open models via Groq's free tier (needs GROQ_API_KEY)
+# "claude" - Claude via the Anthropic API (needs ANTHROPIC_API_KEY, costs money)
+# "ollama" - local model on this PC via Ollama (free, uses your GPU)
+provider = "groq"
+
+[llm.groq]
+# Check https://console.groq.com/docs/models for current models and free limits.
+# gpt-oss models get strict schema-checked output; others use tool calling.
+model = "openai/gpt-oss-20b"
+max_tokens = 2048
+reasoning_effort = "low"  # keeps the model's hidden reasoning short; "" to omit
+
+[llm.claude]
+model = "claude-haiku-5-5"
+max_tokens = 1024
+effort = "low"            # lowest token spend
+
+[llm.ollama]
+model = "qwen2.5:7b"
+base_url = "http://127.0.0.1:11434"
+
+[budget]
+# Hard caps per UTC day. When either is hit the agent switches to "rules"
+# for the rest of the day (free) instead of calling the AI.
+max_llm_calls_per_day = 250
+max_usd_per_day = 0.25
+
+# USD per 1M tokens, used to track spend. Update if prices change.
+[budget.pricing]
+"claude-haiku-5-5"  = { input = 0.10, output = 0.50 }
+"claude-sonnet-5-5" = { input = 2.00, output = 10.00 }
+"claude-opus-5-5"   = { input = 4.00, output = 20.00 }
+
+[data]
+# "live"   - Finnhub (news, quote) + Twelve Data (price history); needs keys
+# "sample" - built-in synthetic data, no keys, for testing
+source = "live"
+candle_interval = "15min"
+candle_count = 100
+max_headlines = 15
+news_lookback_hours = 24

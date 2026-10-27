@@ -14,7 +14,7 @@ Companion to [hybrid-trading-engine-spec.md](hybrid-trading-engine-spec.md). Upd
 | 1 | C++ Limit Order Book core | ✅ Done — 65 tests |
 | 2 | Lock-free SPSC ring buffer | ✅ Done — wired via `MatchingEngine` |
 | 3 | ZeroMQ IPC + param validator | ✅ Done — all 5 AI params enforced by the engine; 74 validator + 12 store + 44 engine tests |
-| 4 | Multi-agent Python cold path | ⬜ Not started (empty stubs) |
+| 4 | Multi-agent Python cold path | ✅ Done — Groq AI + live SPY data verified end-to-end with the C++ engine; 57 Python tests |
 
 ---
 
@@ -26,10 +26,16 @@ cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=C:/hybrid_trading_engine/vcpkg/script
 cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 
-# live end-to-end demo (two terminals, same secret in both)
-$env:HTE_HMAC_SECRET = "<any long random string>"
+# full system (two terminals). Keys live in cold-path\.env (copy .env.example).
+pip install -r cold-path\requirements.txt
+python -m pytest cold-path\tests
+$env:HTE_HMAC_SECRET = "<same value as in cold-path\.env>"
 .\build\Debug\trading_engine_live.exe            # terminal 1: C++ engine
-python cold-path\agent.py                         # terminal 2: stub AI (pip install -r cold-path\requirements.txt)
+python cold-path\agent.py                         # terminal 2: AI agents (groq + live data by default)
+
+# one-off analysis, nothing published:  python cold-path\agent.py --mode once
+# overrides:  --provider rules|groq|claude|ollama   --data live|sample
+# Priority 3 hostile-message demo:      python cold-path\agent.py --mode demo
 ```
 
 ---
@@ -94,8 +100,34 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 
 ## Remaining
 
-### Priority 4
-- [ ] `requirements.txt` additions (LangChain/CrewAI), three agents, `agent.py` orchestration using `publish_params()`
+### Priority 4 — working in rules mode
+Decisions (2026-10-27): LangChain; switchable AI — `rules` (free) / **`groq` (free hosted, chosen)** / `claude` (Haiku 5.5, ~$1/month) / `ollama` (local; user installing it themselves — download speed ~0.2 MB/s made it slow); SPY; 24/7 every 15 min; Finnhub (news + quote) + Twelve Data (candles).
+
+- [x] `cold-path/config.toml` (provider, model, schedule, budget, data source) + `.env.example` for keys
+- [x] `settings.py` (config, `.env` loader, reads C++ `risk_limits.json` so AI uses the same ranges)
+- [x] `ipc.py` (signing/publishing moved out of `agent.py`)
+- [x] `market_data.py` — Finnhub + Twelve Data clients; `sample` source for key-free testing
+- [x] `llm.py` — one interface over ChatAnthropic / ChatOllama; native structured output (`json_schema`); thinking off + effort `low` for Claude; usage returned per call
+- [x] `budget.py` — daily caps on calls and USD, persisted in `cold-path/.state/usage.json`
+- [x] Agents: `technical_agent.py` (pure maths, no AI), `sentiment_agent.py` (AI or keyword rules), `risk_manager_agent.py` (AI or formulas; always clamped to limits)
+- [x] `orchestrator.py` — reuse last AI decision when no new headlines and price moved < 0.25%; budget hit → rules; AI error → rules; data error → keep last decision until it expires (60 min)
+- [x] `agent.py` — modes `live` / `once` / `demo` / `steady`; analysis on a worker thread so the 5 s heartbeat never stalls
+- [x] `llm.py` Groq provider (`langchain-groq`): `openai/gpt-oss-20b` default with strict JSON-schema output, reasoning effort low; other Groq models use tool calling
+- [x] Tests: `cold-path/tests/` — **57 passing** (agents, orchestrator, budget, settings, IPC, data clients, LangChain wrapper incl. Groq) — no network, no spend
+- [x] **End-to-end verified 2026-10-27:** `agent.py --mode live` (rules, sample data) → signed ZMQ → C++ engine accepted and applied the decision (limit 521 × LOW 50% = 260)
+- [x] Keys in `cold-path/.env` (git-ignored, verified): HMAC secret, Groq, Finnhub, Twelve Data
+- [x] **Groq verified 2026-10-27:** `openai/gpt-oss-20b`, ~1,550 in / ~350 out tokens per cycle, ~2–4 s, $0
+- [x] **Live data verified:** Twelve Data 100 × 15-min SPY candles; Finnhub quote ($765.22) + 15 headlines (Yahoo, Reuters, Seeking Alpha)
+- [x] AI vs rules on the same real headlines: rules scored +1.00 (keyword artefact) and flagged a "risk event" on the word "war"; Groq scored +0.05 "mixed", MODERATE — AI clearly better
+- [x] **Full system verified:** `agent.py` (groq + live) → engine accepted MODERATE / 500 → limit 375 applied
+- [x] Defaults in `config.toml` now `provider = "groq"`, `source = "live"`
+- [ ] Optional: user installs Ollama (`ollama pull qwen2.5:3b` recommended on slow connection) → test `--provider ollama`
+- [ ] Commit + push Priority 4
+
+### Next up (agreed 2026-10-27)
+- [ ] **P&L tracking + trade log** in the engine: realised / unrealised P&L, per-trade CSV log, summary stats
+- [ ] **Real market prices into the engine** (paper trading) — today it trades a synthetic book with synthetic ticks, so any P&L would be meaningless
+- [ ] Multi-symbol support — deferred; SPY only for now
 
 ### Hot path follow-ups
 - [ ] Remove or gate `debug_*` accessors
@@ -128,4 +160,5 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 - **2026-10-26** — Repo pushed to GitHub (fruitstash/hybrid-trading-engine).
 - **2026-10-27** — Priority 3 complete: vcpkg manifest, HMAC-signed ZMQ pipeline, validator, seqlock param store, staleness fallback, configurable limits, position-limit risk check, Python stub publisher. 5/5 suites pass; live demo verified.
 - **2026-10-27** — Engine now enforces all five AI parameters (stop loss, spread gate, risk-level-scaled position limit, urgency-scaled price protection). Order book tracks best bid/ask in O(1) and reports fills with notional. New configurable `base_slippage_pct` and `risk_level_position_scale`.
+- **2026-10-27** — Priority 4 built: LangChain multi-agent cold path (technical / sentiment / risk manager), switchable rules / Groq / Claude / Ollama, daily AI budget, reuse-when-unchanged, Finnhub + Twelve Data + sample data. 57 Python tests; end-to-end with the C++ engine verified in rules mode.
 - **2026-10-27** — Decisions: risk-level scales stay 50/75/100; stop loss now starts a 60 s cooldown; positions over a lowered limit are unwound 50 shares/tick within price protection. 44 engine + 74 validator tests; live demo shows unwind 600 → 300 during fallback.
