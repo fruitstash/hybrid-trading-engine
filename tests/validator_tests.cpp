@@ -255,6 +255,33 @@ int main() {
               throws([] { load_risk_config(write_temp("hte_type.json", R"({"max_message_age_s":"5"})")); }));
         check("config: malformed JSON throws",
               throws([] { load_risk_config(write_temp("hte_bad.json", "{ nope")); }));
+
+        RiskConfig scaled = load_risk_config(write_temp("hte_scale.json", R"({
+            "base_slippage_pct": 0.005,
+            "risk_level_position_scale": { "LOW": 0.25 }
+        })"));
+        check("config: slippage and risk-level scale overrides applied",
+              scaled.base_slippage_pct == 0.005 && scaled.position_scale(RiskLevel::LOW) == 0.25 &&
+              scaled.position_scale(RiskLevel::MODERATE) == 0.75 && scaled.position_scale(RiskLevel::HIGH) == 1.0);
+        check("config: repo file sets risk-level scales",
+              repo.position_scale(RiskLevel::LOW) == 0.5 && repo.base_slippage_pct == 0.002);
+        check("config: scale above 1 throws",
+              throws([] { load_risk_config(write_temp("hte_s1.json", R"({"risk_level_position_scale":{"HIGH":1.5}})")); }));
+        check("config: zero scale throws",
+              throws([] { load_risk_config(write_temp("hte_s0.json", R"({"risk_level_position_scale":{"LOW":0}})")); }));
+        check("config: unknown risk level in scale throws",
+              throws([] { load_risk_config(write_temp("hte_s2.json", R"({"risk_level_position_scale":{"EXTREME":1}})")); }));
+        RiskConfig timing = load_risk_config(write_temp("hte_cool.json", R"({"stop_loss_cooldown_s": 0, "unwind_step_shares": 10})"));
+        check("config: cooldown and unwind step overrides applied",
+              timing.stop_loss_cooldown_s == 0.0 && timing.unwind_step_shares == 10);
+        check("config: repo file sets cooldown and unwind step",
+              repo.stop_loss_cooldown_s == 60.0 && repo.unwind_step_shares == 50);
+        check("config: negative cooldown throws",
+              throws([] { load_risk_config(write_temp("hte_cool2.json", R"({"stop_loss_cooldown_s": -1})")); }));
+        check("config: zero unwind step throws",
+              throws([] { load_risk_config(write_temp("hte_unw.json", R"({"unwind_step_shares": 0})")); }));
+        check("config: non-positive slippage throws",
+              throws([] { load_risk_config(write_temp("hte_slip.json", R"({"base_slippage_pct":0})")); }));
     }
 
     std::cout << "\n" << passed << " passed, " << failed << " failed\n";

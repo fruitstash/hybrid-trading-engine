@@ -20,7 +20,8 @@ struct ActiveParams {
 class ParamStore {
     public:
         explicit ParamStore(const RiskConfig& config)
-            : fallback_(config.fallback),
+            : config_(config),
+              fallback_(config.fallback),
               staleness_ns_(static_cast<int64_t>(config.staleness_window_s * 1e9)),
               slot_(Snapshot{config.fallback, 0, false}) {}
 
@@ -33,6 +34,9 @@ class ParamStore {
         void publish(const RiskParams& params, int64_t received_ns) {
             slot_.store(Snapshot{params, received_ns, true});
         }
+
+        // Operator limits this store was built with (immutable after construction).
+        const RiskConfig& config() const { return config_; }
 
         ActiveParams current(int64_t now_ns) const {
             const Snapshot s = slot_.load();
@@ -54,6 +58,7 @@ class ParamStore {
             bool       has_value;
         };
 
+        const RiskConfig config_;
         const RiskParams fallback_;
         const int64_t    staleness_ns_;
         SeqLock<Snapshot> slot_;

@@ -70,6 +70,16 @@ void validate_risk_config(const RiskConfig& c) {
     if (!in(c.stop_loss_threshold_pct, f.stop_loss_threshold_pct)) fail("fallback.stop_loss_threshold_pct outside limits");
     if (!in(c.max_position_size, f.max_position_size))             fail("fallback.max_position_size outside limits");
 
+    if (!(c.base_slippage_pct > 0.0)) fail("base_slippage_pct must be > 0");
+    auto scale_ok = [](double s) { return s > 0.0 && s <= 1.0; };
+    if (!scale_ok(c.risk_level_position_scale.low) || !scale_ok(c.risk_level_position_scale.moderate) ||
+        !scale_ok(c.risk_level_position_scale.high)) {
+        fail("risk_level_position_scale values must be in (0, 1]");
+    }
+
+    if (!(c.stop_loss_cooldown_s >= 0.0)) fail("stop_loss_cooldown_s must be >= 0");
+    if (c.unwind_step_shares == 0)        fail("unwind_step_shares must be >= 1");
+
     if (!(c.staleness_window_s > 0.0)) fail("staleness_window_s must be > 0");
     if (!(c.max_message_age_s > 0.0))  fail("max_message_age_s must be > 0");
     if (!(c.max_future_skew_s >= 0.0)) fail("max_future_skew_s must be >= 0");
@@ -85,7 +95,8 @@ RiskConfig load_risk_config(const std::string& path) {
     if (root.is_discarded()) fail("'" + path + "' is not valid JSON");
     if (!root.is_object())   fail("top level must be an object");
 
-    reject_unknown_keys(root, {"fallback", "limits", "staleness_window_s", "max_message_age_s", "max_future_skew_s"}, "");
+    reject_unknown_keys(root, {"fallback", "limits", "base_slippage_pct", "risk_level_position_scale",
+                               "stop_loss_cooldown_s", "unwind_step_shares", "staleness_window_s", "max_message_age_s", "max_future_skew_s"}, "");
 
     if (root.contains("fallback")) {
         const json& f = root["fallback"];
@@ -115,6 +126,20 @@ RiskConfig load_risk_config(const std::string& path) {
         read_bounds(l, "max_position_size", config.max_position_size, read_uint);
     }
 
+    if (root.contains("risk_level_position_scale")) {
+        const json& s = root["risk_level_position_scale"];
+        const std::string where = "risk_level_position_scale.";
+        if (!s.is_object()) fail("'risk_level_position_scale' must be an object");
+        reject_unknown_keys(s, {"LOW", "MODERATE", "HIGH"}, where);
+        auto& scale = config.risk_level_position_scale;
+        scale.low      = read_number(s, "LOW", scale.low, where);
+        scale.moderate = read_number(s, "MODERATE", scale.moderate, where);
+        scale.high     = read_number(s, "HIGH", scale.high, where);
+    }
+
+    config.base_slippage_pct    = read_number(root, "base_slippage_pct", config.base_slippage_pct, "");
+    config.stop_loss_cooldown_s = read_number(root, "stop_loss_cooldown_s", config.stop_loss_cooldown_s, "");
+    config.unwind_step_shares   = read_uint(root, "unwind_step_shares", config.unwind_step_shares, "");
     config.staleness_window_s = read_number(root, "staleness_window_s", config.staleness_window_s, "");
     config.max_message_age_s  = read_number(root, "max_message_age_s", config.max_message_age_s, "");
     config.max_future_skew_s  = read_number(root, "max_future_skew_s", config.max_future_skew_s, "");

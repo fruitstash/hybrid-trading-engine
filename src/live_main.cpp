@@ -74,9 +74,11 @@ int main(int argc, char** argv) {
     MatchingEngine<1024> engine(*book, *ticks, &store);
     IpcListener listener(endpoint, validator, store, [](const std::string& m) { log_line("ipc", m); });
 
-    // deep resting liquidity so synthetic buys always have something to hit
+    // deep two-sided liquidity (0.1% spread) so synthetic buys always have
+    // something to hit and the spread gate has a market to measure
     for (uint64_t id = 0; id < 1000; ++id) {
-        book->add_order(id, /*is_buy=*/false, 100, 100.00);
+        book->add_order(id,         /*is_buy=*/false, 100, 100.05);
+        book->add_order(10'000 + id, /*is_buy=*/true,  100,  99.95);
     }
 
     std::signal(SIGINT, on_signal);
@@ -102,9 +104,13 @@ int main(int argc, char** argv) {
         os << std::fixed << std::setprecision(1)
            << "source=" << (active.from_ai ? "AI      " : "FALLBACK")
            << " age=" << (active.age_s < 0 ? std::string("never") : std::to_string(static_cast<int>(active.age_s)) + "s")
-           << " max_pos=" << active.params.max_position_size
+           << " risk=" << to_string(active.params.risk_level)
+           << " limit=" << static_cast<int64_t>(active.params.max_position_size *
+                                                config.position_scale(active.params.risk_level))
            << " position=" << engine.net_position()
-           << " rejected_ticks=" << engine.total_rejected()
+           << " rejected(pos/spread)=" << engine.rejected_position() << "/" << engine.rejected_spread()
+           << " unwinds=" << engine.unwind_orders()
+           << " stops=" << engine.stop_loss_triggers()
            << " | msgs ok=" << listener.accepted() << " bad=" << listener.rejected();
         log_line("engine", os.str());
     }

@@ -81,9 +81,9 @@ def run_demo(sock: zmq.Socket, secret: bytes, interval: float, silence: float) -
         return frames
 
     log("phase 1: valid updates")
-    last = send_good()  # kept for the replay test below
     for _ in range(2):
         send_good()
+    last = send_good()  # most recent valid message, replayed below while still fresh
 
     log("phase 2: hostile / broken messages (all should be rejected)")
     bad_json = b'{"timestamp": 17765'

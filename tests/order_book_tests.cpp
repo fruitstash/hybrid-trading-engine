@@ -193,6 +193,69 @@ int main() {
         check("highest price level usable", near(book->best_ask(), 1999.99));
     }
 
+    // ---------- fill reporting ----------
+    {
+        auto book = new_book();
+        book->add_order(1, false, 10, 100.00);
+        book->add_order(2, false, 10, 101.00);
+        Fill f = book->match_market_order(true, 15);
+        check("fill: shares reported", f.shares == 15);
+        check("fill: notional is sum of shares * level price", near(f.notional, 10 * 100.00 + 5 * 101.00));
+        check("fill: avg price", near(f.avg_price(), (1000.0 + 505.0) / 15));
+        Fill dry = book->match_market_order(true, 100);
+        check("fill: partial when book runs dry", dry.shares == 5);
+        Fill none = book->match_market_order(true, 10);
+        check("fill: nothing on empty side", none.shares == 0 && none.avg_price() == 0.0);
+    }
+
+    // ---------- limit price (price protection) ----------
+    {
+        auto book = new_book();
+        book->add_order(1, false, 10, 100.00);
+        book->add_order(2, false, 10, 100.50);
+        book->add_order(3, false, 10, 101.00);
+        Fill f = book->match_market_order(true, 30, 100.50);
+        check("limit buy: stops at limit price (inclusive)", f.shares == 20 && book->debug_ask_volume(101.00) == 10);
+        check("limit buy: best ask moves past consumed levels", near(book->best_ask(), 101.00));
+        check("limit buy: below best ask fills nothing", book->match_market_order(true, 5, 100.99).shares == 0);
+
+        book->add_order(4, true, 10, 50.00);
+        book->add_order(5, true, 10, 49.50);
+        book->add_order(6, true, 10, 49.00);
+        f = book->match_market_order(false, 30, 49.50);
+        check("limit sell: stops at limit price (inclusive)", f.shares == 20 && book->debug_bid_volume(49.00) == 10);
+        check("limit sell: best bid moves past consumed levels", near(book->best_bid(), 49.00));
+        check("limit sell: above best bid fills nothing", book->match_market_order(false, 5, 49.01).shares == 0);
+    }
+
+    // ---------- best price tracking ----------
+    {
+        auto book = new_book();
+        book->add_order(1, true, 10, 10.00);
+        book->add_order(2, true, 10, 12.00);
+        book->add_order(3, true, 10, 11.00);
+        check("tracking: best bid after out-of-order adds", near(book->best_bid(), 12.00));
+        book->cancel_order(2);
+        check("tracking: cancel best bid falls to next level", near(book->best_bid(), 11.00));
+        book->cancel_order(1);
+        check("tracking: cancel non-best bid leaves best alone", near(book->best_bid(), 11.00));
+        book->cancel_order(3);
+        check("tracking: last bid cancelled -> empty", book->best_bid() == 0.0);
+
+        book->add_order(4, false, 10, 20.00);
+        book->add_order(5, false, 10, 20.00);
+        book->cancel_order(4);
+        check("tracking: level with remaining orders stays best", near(book->best_ask(), 20.00));
+        book->add_order(6, false, 10, 19.00);
+        check("tracking: lower ask becomes best", near(book->best_ask(), 19.00));
+        book->match_market_order(true, 20);
+        check("tracking: fully consumed side -> empty", book->best_ask() == 0.0);
+        book->add_order(7, false, 10, 25.00);
+        check("tracking: side refills after being empty", near(book->best_ask(), 25.00));
+
+        check("price below one tick rejected", throws([&] { book->add_order(8, true, 10, 0.004); }));
+    }
+
     std::cout << "\n" << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;
 }

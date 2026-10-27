@@ -3,7 +3,7 @@
 Companion to [hybrid-trading-engine-spec.md](hybrid-trading-engine-spec.md). Updated periodically as work lands.
 
 **Last updated:** 2026-10-27
-**Current focus:** Priority 4 (multi-agent cold path), or hot-path cleanups from Known Issues first.
+**Current focus:** Priority 4 (multi-agent cold path).
 
 ---
 
@@ -11,9 +11,9 @@ Companion to [hybrid-trading-engine-spec.md](hybrid-trading-engine-spec.md). Upd
 
 | Priority | Area | Status |
 |---|---|---|
-| 1 | C++ Limit Order Book core | ✅ Done — 45 tests |
+| 1 | C++ Limit Order Book core | ✅ Done — 65 tests |
 | 2 | Lock-free SPSC ring buffer | ✅ Done — wired via `MatchingEngine` |
-| 3 | ZeroMQ IPC + param validator | ✅ Done — 64 validator + 12 store tests, end-to-end demo verified |
+| 3 | ZeroMQ IPC + param validator | ✅ Done — all 5 AI params enforced by the engine; 74 validator + 12 store + 44 engine tests |
 | 4 | Multi-agent Python cold path | ⬜ Not started (empty stubs) |
 
 ---
@@ -45,8 +45,10 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 ### Priority 1 — Order book
 - [x] `Order`, `LimitLevel`, `OrderBook` per spec §4; add / cancel / best bid-ask / market match
 - [x] Fixed two memory leaks (bad-price `add_order`, missing destructor)
-- [x] `match_market_order` now returns shares filled
-- [x] `tests/order_book_tests.cpp` — 45 checks
+- [x] `tests/order_book_tests.cpp` — 65 checks
+- [x] Best bid/ask tracked on every add/cancel/fill → O(1) lookup; market orders start at the best level (was: scan up to 200k levels)
+- [x] `match_market_order` returns a `Fill` (shares + notional) and takes an optional limit price
+- [x] Prices that round to zero ticks are rejected
 
 ### Priority 2 — Ring buffer
 - [x] `ring_buffer.hpp` SPSC + tests (5M-tick two-thread test)
@@ -60,7 +62,13 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 - [x] `param_validator.hpp/.cpp` — signature checked **before** parsing; malformed JSON discarded; exact field set; type + sign checks; clamping; freshness window; replay protection (timestamps must strictly increase); all-or-nothing
 - [x] `seqlock.hpp` + `param_store.hpp` — lock-free single-writer hand-off to the matching thread; staleness judged on local steady clock → fallback defaults
 - [x] `ipc_listener.hpp/.cpp` — SUB thread, 200 ms poll for clean shutdown, bounded queue
-- [x] **Risk check** in `MatchingEngine`: rejects ticks that would push |net position| past `max_position_size`, except ticks that reduce exposure; position tracks actual fills
+- [x] **All five AI parameters enforced** in `MatchingEngine`, checked in this order on every tick:
+  0. cooldown — after a stop loss, ignore every tick for `stop_loss_cooldown_s`
+  1. `stop_loss_threshold_pct` — tracks volume-weighted entry price; if the position is down more than this (marked at the exit side), flatten it, start the cooldown, drop the tick
+  2. unwind — if over the limit (e.g. it was just lowered), trade up to `unwind_step_shares` back toward it, within price protection
+  3. `max_spread_pct` — reject if either side is empty or (ask − bid) / mid is wider
+  4. `max_position_size` × `risk_level` scale — reject if |position| could exceed it, unless the tick reduces exposure
+  5. `urgency_multiplier` — price protection: fill no further than `base_slippage_pct` × urgency past the best price
 - [x] `live_main.cpp` → `trading_engine_live` — end-to-end harness with synthetic 40-share buy each second
 - [x] `cold-path/agent.py` stub — `publish_params()` reusable by Priority 4; demo mode sends good / hostile / clamped messages, then goes silent
 - [x] Tests: `validator_tests.cpp` (64, incl. RFC 4231 HMAC vectors and config loading), `param_store_tests.cpp` (12, incl. 2M-write torn-read test), `matching_engine_tests.cpp` (+9 risk checks → 17)
@@ -75,6 +83,10 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 | stop_loss_threshold_pct | 0.01 | 0.001 – 0.10 |
 | max_position_size | 100 | 1 – 1000 |
 | risk_level | LOW | LOW / MODERATE / HIGH |
+| risk-level position scale | | LOW 0.5 · MODERATE 0.75 · HIGH 1.0 |
+| base_slippage_pct | 0.002 (× urgency) | |
+| stop_loss_cooldown_s | 60 s | ≥ 0 (0 = off) |
+| unwind_step_shares | 50 per tick | ≥ 1 |
 | staleness window | 30 s | |
 | max message age / future skew | 5 s / 2 s | |
 
@@ -86,7 +98,6 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 - [ ] `requirements.txt` additions (LangChain/CrewAI), three agents, `agent.py` orchestration using `publish_params()`
 
 ### Hot path follow-ups
-- [ ] Use the other AI params: only `max_position_size` is enforced today; `max_spread_pct`, `stop_loss_threshold_pct`, `urgency_multiplier`, `risk_level` are validated and delivered but unused
 - [ ] Remove or gate `debug_*` accessors
 
 ### Housekeeping
@@ -100,11 +111,13 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 1. Order `timestamp_ns` is never set (always 0).
 2. `Order` is not 64-byte aligned despite the spec comment.
 3. `new`/`delete` and `unordered_map` on the hot path conflict with "zero heap allocation".
-4. `best_bid`/`best_ask` and `match_market_order` scan from the array edge every call (up to 200k levels).
-5. Ticks carry a `price` field that `MatchingEngine` ignores (ticks are treated as market orders).
-6. `RingBuffer` head/tail atomics share a cache line (false sharing).
-7. Replay protection relies on publisher timestamps strictly increasing; restarting the C++ side resets it (a replay within the 5 s age window after restart would be accepted once).
-8. HMAC secret is a shared env var; no rotation mechanism yet.
+4. Ticks carry a `price` field that `MatchingEngine` ignores (ticks are treated as market orders).
+5. `RingBuffer` head/tail atomics share a cache line (false sharing).
+6. Replay protection relies on publisher timestamps strictly increasing; restarting the C++ side resets it (a replay within the 5 s age window after restart would be accepted once).
+7. HMAC secret is a shared env var; no rotation mechanism yet.
+8. Stop loss flattens with no price limit (deliberate: getting out beats getting a good price).
+9. Position check uses the requested tick size; a fill capped by price protection may leave headroom unused (conservative).
+10. Unwind runs only when a tick arrives (no ticks → no unwinding), and stops if the exit side is empty or entirely outside the price-protection band.
 
 ---
 
@@ -114,3 +127,5 @@ python cold-path\agent.py                         # terminal 2: stub AI (pip ins
 - **2026-10-26** — Priority 1 tests (45). Fixed two order-book leaks. Priority 2 wired via `MatchingEngine`.
 - **2026-10-26** — Repo pushed to GitHub (fruitstash/hybrid-trading-engine).
 - **2026-10-27** — Priority 3 complete: vcpkg manifest, HMAC-signed ZMQ pipeline, validator, seqlock param store, staleness fallback, configurable limits, position-limit risk check, Python stub publisher. 5/5 suites pass; live demo verified.
+- **2026-10-27** — Engine now enforces all five AI parameters (stop loss, spread gate, risk-level-scaled position limit, urgency-scaled price protection). Order book tracks best bid/ask in O(1) and reports fills with notional. New configurable `base_slippage_pct` and `risk_level_position_scale`.
+- **2026-10-27** — Decisions: risk-level scales stay 50/75/100; stop loss now starts a 60 s cooldown; positions over a lowered limit are unwound 50 shares/tick within price protection. 44 engine + 74 validator tests; live demo shows unwind 600 → 300 during fallback.

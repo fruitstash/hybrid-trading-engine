@@ -2,5 +2,9 @@
   "cmake.configureSettings": {
     "CMAKE_TOOLCHAIN_FILE": "C:/hybrid_trading_engine/vcpkg/scripts/buildsystems/vcpkg.cmake",
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+  },
+  // risk config allows // comments (the C++ loader parses it as JSONC)
+  "files.associations": {
+    "**/config/*.json": "jsonc"
   }
 }

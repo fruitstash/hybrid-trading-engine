@@ -19,6 +19,20 @@
     "max_position_size":       { "min": 1,      "max": 1000 }
   },
 
+  // Market-order price protection: may fill at most
+  // base_slippage_pct * urgency_multiplier beyond the best price.
+  "base_slippage_pct": 0.002,
+
+  // Effective position limit = max_position_size * scale for the risk_level.
+  "risk_level_position_scale": { "LOW": 0.5, "MODERATE": 0.75, "HIGH": 1.0 },
+
+  // After a stop loss sells out, ignore all ticks for this many seconds (0 = no cooldown).
+  "stop_loss_cooldown_s": 60,
+
+  // When over the position limit (e.g. limit was lowered), unwind at most
+  // this many shares per tick until back within it.
+  "unwind_step_shares": 50,
+
   // Seconds without an accepted update before reverting to "fallback".
   "staleness_window_s": 30,
   // Reject messages older than this / further in the future than this.

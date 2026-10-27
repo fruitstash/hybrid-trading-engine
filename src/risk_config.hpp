@@ -30,6 +30,29 @@ struct RiskConfig {
     Bounds<double>   stop_loss_threshold_pct{0.001, 0.10};
     Bounds<uint32_t> max_position_size{1, 1000};
 
+    // Price protection for market orders: may fill at most
+    // base_slippage_pct * urgency_multiplier beyond the best price.
+    double base_slippage_pct = 0.002;
+
+    // Effective position limit = max_position_size * scale for the current risk_level.
+    struct { double low = 0.5, moderate = 0.75, high = 1.0; } risk_level_position_scale;
+
+    double position_scale(RiskLevel level) const {
+        switch (level) {
+            case RiskLevel::LOW:      return risk_level_position_scale.low;
+            case RiskLevel::MODERATE: return risk_level_position_scale.moderate;
+            case RiskLevel::HIGH:     return risk_level_position_scale.high;
+        }
+        return risk_level_position_scale.low;
+    }
+
+    // After a stop loss flattens the position, ignore all ticks for this long. 0 disables.
+    double stop_loss_cooldown_s = 60.0;
+
+    // When the position is over the (possibly just lowered) limit, each tick sells
+    // (or buys back) at most this many shares toward the limit, within price protection.
+    uint32_t unwind_step_shares = 50;
+
     // No accepted update for this long -> revert to `fallback`.
     double staleness_window_s = 30.0;
     // Reject messages whose timestamp is older than this (replay protection)...
