@@ -124,6 +124,11 @@ Decisions (2026-10-27): LangChain; switchable AI — `rules` (free) / **`groq` (
 - [ ] Optional: user installs Ollama (`ollama pull qwen2.5:3b` recommended on slow connection) → test `--provider ollama`
 - [ ] Commit + push Priority 4
 
+### Dependencies (2026-11-19)
+- [x] Upgraded to latest (incl. major jumps `groq` 0.37 → 1.7, `anthropic` 1.17 → 2.10); 57 tests + live Groq run pass
+- [x] `cold-path/requirements.txt` now pins exact tested versions (was minimum versions only, so a fresh install could pull untested majors)
+- [ ] Claude path on `anthropic` 2.x only covered by unit tests (no API key to test live)
+
 ### Next up (agreed 2026-10-27)
 - [ ] **P&L tracking + trade log** in the engine: realised / unrealised P&L, per-trade CSV log, summary stats
 - [ ] **Real market prices into the engine** (paper trading) — today it trades a synthetic book with synthetic ticks, so any P&L would be meaningless
@@ -160,5 +165,6 @@ Decisions (2026-10-27): LangChain; switchable AI — `rules` (free) / **`groq` (
 - **2026-10-26** — Repo pushed to GitHub (fruitstash/hybrid-trading-engine).
 - **2026-10-27** — Priority 3 complete: vcpkg manifest, HMAC-signed ZMQ pipeline, validator, seqlock param store, staleness fallback, configurable limits, position-limit risk check, Python stub publisher. 5/5 suites pass; live demo verified.
 - **2026-10-27** — Engine now enforces all five AI parameters (stop loss, spread gate, risk-level-scaled position limit, urgency-scaled price protection). Order book tracks best bid/ask in O(1) and reports fills with notional. New configurable `base_slippage_pct` and `risk_level_position_scale`.
+- **2026-11-19** — Health check after 20 days: no code changes, all C++ and Python tests pass, Groq + Finnhub + Twelve Data still working. Upgraded Python deps to latest and pinned exact versions.
 - **2026-10-27** — Priority 4 built: LangChain multi-agent cold path (technical / sentiment / risk manager), switchable rules / Groq / Claude / Ollama, daily AI budget, reuse-when-unchanged, Finnhub + Twelve Data + sample data. 57 Python tests; end-to-end with the C++ engine verified in rules mode.
 - **2026-10-27** — Decisions: risk-level scales stay 50/75/100; stop loss now starts a 60 s cooldown; positions over a lowered limit are unwound 50 shares/tick within price protection. 44 engine + 74 validator tests; live demo shows unwind 600 → 300 during fallback.

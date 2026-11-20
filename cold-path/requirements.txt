@@ -1,8 +1,13 @@
-pyzmq>=26
-requests>=2.32
-pydantic>=2.9
-langchain-core>=1.7
-langchain-groq>=1.1        # only used when [llm] provider = "groq"
-langchain-anthropic>=1.7   # only used when [llm] provider = "claude"
-langchain-ollama>=1.1      # only used when [llm] provider = "ollama"
-pytest>=8                  # tests
+# Exact versions the cold path was last tested with (2026-11-19: 57 tests + live Groq run).
+# To upgrade: install newer versions in a fresh venv, run `python -m pytest cold-path/tests`
+# and `python cold-path/agent.py --mode once`, then update the pins here.
+pyzmq==27.3.0
+requests==2.34.2
+pydantic==2.14.3
+langchain-core==1.8.3
+langchain-groq==1.2.1        # [llm] provider = "groq"
+groq==1.7.0
+langchain-anthropic==1.7.11  # [llm] provider = "claude"
+anthropic==2.10.0
+langchain-ollama==1.1.0      # [llm] provider = "ollama"
+pytest==9.2.0                # tests
